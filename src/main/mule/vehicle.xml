@@ -1,0 +1,88 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:dynamodb="http://www.mulesoft.org/schema/mule/dynamodb" xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core"
+	xmlns:amazon-lambda="http://www.mulesoft.org/schema/mule/amazon-lambda"
+	xmlns:http="http://www.mulesoft.org/schema/mule/http" xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+http://www.mulesoft.org/schema/mule/amazon-lambda http://www.mulesoft.org/schema/mule/amazon-lambda/current/mule-amazon-lambda.xsd
+http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd
+http://www.mulesoft.org/schema/mule/dynamodb http://www.mulesoft.org/schema/mule/dynamodb/current/mule-dynamodb.xsd">
+	<http:listener-config name="HTTP_Listener_config" doc:name="HTTP Listener config" doc:id="0e901a40-7061-446b-950f-7e2f8603d207" >
+		<http:listener-connection host="0.0.0.0" port="8080" />
+	</http:listener-config>
+	<amazon-lambda:config name="Amazon_Lambda_Connector_Config" doc:name="Amazon Lambda Connector Config" doc:id="383bfa7f-cfd1-4230-8fd6-628d104a268d" >
+		<amazon-lambda:connection accessKey="access-key" secretKey="secret-key" />
+	</amazon-lambda:config>
+	<dynamodb:config name="Amazon_DynamoDB_Configuration" doc:name="Amazon DynamoDB Configuration" doc:id="675abe17-6974-4858-a5b8-15c11bf9024a" >
+		<dynamodb:basic-connection accessKey="access-key" secretKey="secret-key" />
+	</dynamodb:config>
+	<flow name="createVehicleFlow" doc:id="a72820bd-e883-4933-a3b9-bf43d7ce0012" >
+		<http:listener doc:name="vehicle-create" doc:id="75d3c76a-fae1-497a-ab90-4663e510d0d7" config-ref="HTTP_Listener_config" path="vehicle" allowedMethods="POST"/>
+		<logger level="INFO" doc:name="Logger" doc:id="14bb3063-03da-4d64-a9f1-3cf345ad2eea" message="#[payload]"/>
+		<amazon-lambda:create20150331-functions-invocations-by-function-name doc:name="VehicleCreate" doc:id="400cb34a-c48e-4076-9b2c-b0587b0a5ac3" config-ref="Amazon_Lambda_Connector_Config" functionName="vehicle-create"/>
+	</flow>
+	<flow name="fetchVehicleFlow" doc:id="dbbd4cfa-30b7-4438-9fb6-648b9b0bda7f" >
+		<http:listener doc:name="vehicle-fetch" doc:id="3804b38f-39fe-4377-a239-3bd518ceaedd" config-ref="HTTP_Listener_config" path="/vehicle/{id}" allowedMethods="GET"/>
+		<ee:transform doc:name="Transform Message" doc:id="6ac272cb-ef08-48b1-bfca-cb016b115f36" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+{
+	"id": attributes.uriParams.id
+}]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		<logger level="INFO" doc:name="Logger" doc:id="5c0059ff-3e20-4ccc-bca3-dd92a0125570" message="#[payload]"/>
+		<amazon-lambda:create20150331-functions-invocations-by-function-name doc:name="VehicleFetch" doc:id="89d77467-1f09-4e3c-8282-e6f07e4c8dc1" config-ref="Amazon_Lambda_Connector_Config" functionName="vehicle-fetch" xAmzLogType="TAIL">
+		</amazon-lambda:create20150331-functions-invocations-by-function-name>
+	</flow>
+	<flow name="updateVehicleFlow" doc:id="3c51b09f-b557-4f91-b8ad-bb71e7798bf8" >
+		<http:listener doc:name="vehicle-update" doc:id="c7c492d5-f365-48dd-b246-bb4d4044ccd6" config-ref="HTTP_Listener_config" path="/vehicle/{id}" allowedMethods="PUT">
+			<http:response statusCode="204" />
+		</http:listener>
+		<ee:transform doc:name="Transform Message" doc:id="6cd1a2b5-1566-47e9-9081-39cf8d8d7bab" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+{
+	"id": attributes.uriParams.id,
+	"brand": payload.brand,
+	"model": payload.model,
+	"year": payload.year,
+	"plate": payload.plate
+}]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		<logger level="INFO" doc:name="Logger" doc:id="6e621d72-f917-4afd-a970-b6bf0bfb37e1" message="#[payload]"/>
+		<amazon-lambda:create20150331-functions-invocations-by-function-name doc:name="VehicleUpdate" doc:id="5b0da70b-4aec-47f1-86ef-b5ef4fe25304" config-ref="Amazon_Lambda_Connector_Config" functionName="vehicle-update"/>
+	</flow>
+	<flow name="listVehicleFlow" doc:id="66fe277c-cf7e-408b-b32e-fb80f1d541e8" >
+		<http:listener doc:name="vehicle-list" doc:id="dae75b7e-50df-4109-9d6b-a07517abf4a2" config-ref="HTTP_Listener_config" path="/vehicle" allowedMethods="GET">
+		</http:listener>
+		<set-variable variableName="requestUri" value="#[attributes.requestUri]" />
+		<dynamodb:scan tableName="vehicle" doc:name="Scan" doc:id="26e10261-a572-4b41-a9f0-77e793f6a87f" config-ref="Amazon_DynamoDB_Configuration" limit="10"/>
+		<ee:transform doc:name="Transform Message" doc:id="cc07f96f-b4b4-4fd9-9502-6d27ce690496" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+{
+	"count": payload.count,
+	"lastKey": payload.lastEvaluatedKey,
+	"total": payload.scannedCount,
+	"items": payload.items map (
+		(item, index) -> {
+			"brand": item.brand.s,
+			"model": item.model.s,
+			"plate": item.plate.s,
+			"detail": vars.requestUri ++ "/" ++ item.id.s as String
+ 		}
+	)
+}]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		<logger level="INFO" doc:name="Logger" doc:id="8634f7f3-ff06-4b4e-a837-80b29139f3f2" message="#[attributes]"/>
+	</flow>
+</mule>
